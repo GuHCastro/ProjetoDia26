@@ -1,5 +1,7 @@
 import express from 'express';
 import path from 'path';
+import cookieParser from 'cookie-parser';
+import session from 'express-session';
 
 const porta = 3000;
 const host = '0.0.0.0';
@@ -147,34 +149,71 @@ function processaCadastroUsuario(req, res) {
     }
 }
 
+function autenticar(req, res, next) {
+    if (req.session.usuarioAutenticado) {
+        next();
+    } else {
+        res.redirect("/login.html");
+    }
+}
+
 const app = express();
+app.use(cookieParser());
+
+app.use(session({
+    secret: "Minh4Chav3S3cr3T4",
+    resave: true,
+    saveUninitialized: true,
+    cookie: {
+        maxAge: 1000 * 60 * 15,
+    }
+}))
 
 app.use(express.urlencoded({ extended: true }));
 
 app.use(express.static(path.join(process.cwd(), './Paginashtml')));
 
-app.get('/formulario.html', (req, res) => {
-    res.end(`
-    <!DOCTYPE html>
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link rel="icon" type="image/x-icon" href="favicon.ico">
-        <link rel="stylesheet" type="text/css" href="estilizacao.css">
-        <title>Menu do Sistema</title>
-    </head>
-    <body>
-        <h1>MENU</h1>
-        <ul>
-            <li><a href="/formulario.html">Cadastro</a></li>
-        </ul>
-    </body>
-    </html>
-    `)
+app.get('/', autenticar, (req, res) => {
+    const dataUltimoAcesso = req.cookies.DataUltimoAcesso;
+    const data = new Date();
+    res.cookie("DataUltimoAcesso", data.toLocaleString(), {
+        maxAge: 1000 * 60 * 60 * 24 * 30,
+        httpOnly: true
+    });
+    res.sendFile(path.join(process.cwd(), './Paginashtml/menu.html'));
 });
 
-app.post('/formulario.html', processaCadastroUsuario);
+app.get('/formulario.html', autenticar, (req, res) => {
+    res.sendFile(path.join(process.cwd(), './Paginashtml/formulario.html'));
+});
+
+app.post('/formulario.html', autenticar, processaCadastroUsuario);
+
+app.post('/login', (req, res) => {
+    const usuario = req.body.usuario;
+    const senha = req.body.senha;
+
+    console.log("Usuario:", usuario, "Senha:", senha); // Adicione esta linha para debug
+
+    if (usuario && senha && usuario === 'Gustavo' && senha === '123') {
+        req.session.usuarioAutenticado = true;
+        res.redirect('/');
+    } else {
+        console.log("Login falhou. Usuário ou senha incorretos."); // Adicione esta linha para debug
+        res.end(`
+            <!DOCTYPE html>
+                <head>
+                    <meta charset="UTF-8">
+                    <title>Falha no login</title>
+                </head>
+                <body>
+                    <h1>Usuario ou senha invalidos</h1>
+                    <a href="/login.html">Voltar ao login</a>
+                </body> 
+        `)
+    }
+});
 
 app.listen(porta, host, () => {
-    console.log(`Servidor rodando na url http://localhost:3000/formulario.html`);
+    console.log(`Servidor rodando na url http://localhost:3000`);
 });
